@@ -1,0 +1,935 @@
+openapi: 3.0.0
+info:
+  title: Car Market API
+  version: 1.0.0
+  description: Avtomobil bozoriga oid RESTful API
+    
+  contact:
+    email: salaevdonik@gmail.com
+
+servers:
+  - url: http://localhost:4001
+    description: Mahalliy server
+
+tags:
+  - name: Auth
+    description: Foydalanuvchi autentifikatsiyasi
+  - name: Brand
+    description: Avtomobil brendlarini boshqarish
+  - name: Car
+    description: Avtomobillarni boshqarish
+
+paths:
+
+  /register:
+    post:
+      tags:
+        - Auth
+      summary: Ro'yxatdan o'tish
+      description: Yangi foydalanuvchi yaratadi va emailga OTP kodi yuboradi
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - email
+                - password
+              properties:
+                username:
+                  type: string
+                  example: johndoe
+                email:
+                  type: string
+                  format: email
+                  example: salaevdonik@gmail.com
+                password:
+                  type: string
+                  format: password
+                  example: Secret123!
+      responses:
+        '201':
+          description: Muvaffaqiyatli ro'yxatdan o'tildi, emailga kod yuborildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Registered
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /verify:
+    post:
+      tags:
+        - Auth
+      summary: OTP kodni tasdiqlash
+      description: Emailga kelgan kodni tekshiradi va access/refresh tokenlarini cookie'ga o'rnatadi
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - code
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: salaevdonik@gmail.com
+                code:
+                  type: string
+                  example: "482751"
+      responses:
+        '200':
+          description: Muvaffaqiyatli tasdiqlandi
+          headers:
+            Set-Cookie:
+              description: accessToken va refreshToken cookie'lari o'rnatiladi
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /login:
+    post:
+      tags:
+        - Auth
+      summary: Kirish
+      description: Email va parol bilan kiradi, emailga OTP kod yuboradi
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: salaevdonik@gmail.com
+                password:
+                  type: string
+                  format: password
+                  example: Secret123!
+      responses:
+        '200':
+          description: OTP kod emailga yuborildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Please check your email
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /refresh:
+    get:
+      tags:
+        - Auth
+      summary: Tokenlarni yangilash
+      description: Refresh token yordamida yangi accessToken va refreshToken generatsiya qiladi
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Tokenlar muvaffaqiyatli yangilandi
+          headers:
+            Set-Cookie:
+              description: Yangi accessToken va refreshToken cookie'lari o'rnatiladi
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Tokens refreshed"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /logout:
+    get:
+      tags:
+        - Auth
+      summary: Chiqish
+      description: accessToken va refreshToken cookie'larini o'chiradi
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Muvaffaqiyatli chiqildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: ok
+
+  /profile:
+    get:
+      tags:
+        - Auth
+      summary: Profil ma'lumotlari
+      description: |
+        Joriy foydalanuvchi profilini qaytaradi.
+        Admin/superadmin uchun o'ziga tegishli brendlar va avtomobillar ham qaytariladi.
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Profil ma'lumotlari
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /forgot_password:
+    post:
+      tags:
+        - Auth
+      summary: Parolni unutdim
+      description: Emailga OTP kod yuboradi (parolni tiklash uchun)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: salaevdonik@gmail.com
+      responses:
+        '200':
+          description: OTP kod yuborildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Please check your email
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /change_password:
+    post:
+      tags:
+        - Auth
+      summary: Parolni o'zgartirish
+      description: Foydalanuvchi parolini yangilaydi (autentifikatsiya talab qilinadi)
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - new_password
+              properties:
+                new_password:
+                  type: string
+                  format: password
+                  example: NewSecret456!
+      responses:
+        '200':
+          description: Parol muvaffaqiyatli o'zgartirildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Success
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /get_all_brands:
+    get:
+      tags:
+        - Brand
+      summary: Barcha brendlarni olish
+      description: Ma'lumotlar bazasidagi barcha brendlar ro'yxatini qaytaradi
+      responses:
+        '200':
+          description: Brendlar ro'yxati
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Brand'
+
+  /search_brand:
+    get:
+      tags:
+        - Brand
+      summary: Brend qidirish
+      description: Nom bo'yicha brendlarni qidiradi (case-insensitive)
+      parameters:
+        - name: searchingvalue
+          in: query
+          required: true
+          description: Qidiruv so'zi
+          schema:
+            type: string
+            example: Toyota
+      responses:
+        '200':
+          description: Topilgan brendlar
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Brand'
+
+  /add_brand:
+    post:
+      tags:
+        - Brand
+      summary: Yangi brend qo'shish
+      description: Yangi brend yaratadi. Faqat admin va superadmin uchun.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - name
+                - logo
+              properties:
+                name:
+                  type: string
+                  example: Toyota
+                logo:
+                  type: string
+                  format: binary
+                  description: Brend logotipi (rasm fayl)
+      responses:
+        '201':
+          description: Brend muvaffaqiyatli qo'shildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Added new brand
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /get_one_brand/{id}:
+    get:
+      tags:
+        - Brand
+      summary: Bitta brendni olish
+      description: ID bo'yicha bitta brendni qaytaradi
+      parameters:
+        - $ref: '#/components/parameters/idParam'
+      responses:
+        '200':
+          description: Brend ma'lumotlari
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /update_brand/{id}:
+    put:
+      tags:
+        - Brand
+      summary: Brendni yangilash
+      description: Mavjud brendni yangilaydi. Faqat admin va superadmin uchun.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idParam'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Toyota Updated
+                logo:
+                  type: string
+                  format: binary
+                  description: Yangi logotip (ixtiyoriy)
+      responses:
+        '200':
+          description: Brend muvaffaqiyatli yangilandi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Updated brand
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /delete_brand/{id}:
+    delete:
+      tags:
+        - Brand
+      summary: Brendni o'chirish
+      description: Brendni o'chiradi. Faqat admin va superadmin uchun.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idParam'
+      responses:
+        '200':
+          description: Brend muvaffaqiyatli o'chirildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Deleted brand
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /get_all_cars:
+    get:
+      tags:
+        - Car
+      summary: Barcha avtomobillarni olish
+      description: Barcha avtomobillar ro'yxatini brend ma'lumotlari bilan qaytaradi
+      responses:
+        '200':
+          description: Avtomobillar ro'yxati
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Car'
+
+  /search_car:
+    get:
+      tags:
+        - Car
+      summary: Avtomobil qidirish
+      description: Nomi bo'yicha avtomobillarni qidiradi (case-insensitive)
+      parameters:
+        - name: searchingvalue
+          in: query
+          required: true
+          description: Qidiruv so'zi
+          schema:
+            type: string
+            example: Camry
+      responses:
+        '200':
+          description: Topilgan avtomobillar
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Car'
+
+  get_cars_by_brand/{brand_id}:
+    get:
+      tags:
+        - Car
+      summary: Brend bo'yicha avtomobillarni olish
+      description: Berilgan brend ID si bo'yicha barcha avtomobillarni qaytaradi
+      parameters:
+        - name: brand_id
+          in: path
+          required: true
+          description: Brend ID si
+          schema:
+            type: string
+            example: 6648a1f2c3d4e5f6a7b8c9d0
+      responses:
+        '200':
+          description: Brendga tegishli avtomobillar
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Car' 
+
+  /add_car:
+    post:
+      tags:
+        - Car
+      summary: Yangi avtomobil qo'shish
+      description: Yangi avtomobil yaratadi. Faqat admin va superadmin uchun.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - title
+                - brand_info
+                - tanirovkasi
+                - motor
+                - year
+                - color
+                - distance
+                - gearbook
+                - narxi
+                - picture
+              properties:
+                title:
+                  type: string
+                  example: Toyota Camry
+                brand_info:
+                  type: string
+                  description: Brend MongoDB ObjectId
+                  example: 6648a1f2c3d4e5f6a7b8c9d0
+                tanirovkasi:
+                  type: string
+                  description: Avtomobil tanirovkasi 
+                  example: Sedan
+                motor:
+                  type: string
+                  description: Motor hajmi
+                  example: 2.5L
+                year:
+                  type: integer
+                  description: Ishlab chiqarilgan yil
+                  example: 2022
+                color:
+                  type: string
+                  example: White
+                distance:
+                  type: number
+                  description: Bosib o'tilgan masofa 
+                  example: 35000
+                gearbook:
+                  type: string
+                  description: Uzatmalar qutisi turi
+                  example: Automatic
+                narxi:
+                  type: number
+                  description: Narxi
+                  example: 25000
+                description:
+                  type: string
+                  example: Yaxshi holda, 
+                picture:
+                  type: string
+                  format: binary
+                  description: Asosiy rasm 
+                picture_ichki:
+                  type: string
+                  format: binary
+                  description: Ichki ko'rinish rasmi 
+                picture_tashqi:
+                  type: string
+                  format: binary
+                  description: Tashqi ko'rinish rasmi 
+      responses:
+        '201':
+          description: Avtomobil muvaffaqiyatli qo'shildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Added new car
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /get_one_car/{id}:
+    get:
+      tags:
+        - Car
+      summary: Bitta avtomobilni olish
+      description: ID bo'yicha bitta avtomobilni brend ma'lumotlari bilan qaytaradi
+      parameters:
+        - $ref: '#/components/parameters/idParam'
+      responses:
+        '200':
+          description: Avtomobil ma'lumotlari
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Car'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /update_car/{id}:
+    put:
+      tags:
+        - Car
+      summary: Avtomobilni yangilash
+      description: Mavjud avtomobilni yangilaydi. Faqat admin va superadmin uchun.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idParam'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: Toyota Camry SE
+                brand_info:
+                  type: string
+                  example: 6648a1f2c3d4e5f6a7b8c9d0
+                tanirovkasi:
+                  type: string
+                  example: Sedan
+                motor:
+                  type: string
+                  example: 2.5L
+                year:
+                  type: integer
+                  example: 2022
+                color:
+                  type: string
+                  example: Black
+                distance:
+                  type: number
+                  example: 40000
+                gearbook:
+                  type: string
+                  example: Automatic
+                narxi:
+                  type: number
+                  example: 23000
+                description:
+                  type: string
+                  example: Yangilangan holat
+                picture:
+                  type: string
+                  format: binary
+                  description: Yangi asosiy rasm 
+                picture_ichki:
+                  type: string
+                  format: binary
+                  description: Yangi ichki rasm 
+                picture_tashqi:
+                  type: string
+                  format: binary
+                  description: Yangi tashqi rasm 
+      responses:
+        '200':
+          description: Avtomobil muvaffaqiyatli yangilandi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Updated car
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  delete_car/{id}:
+    delete:
+      tags:
+        - Car
+      summary: Avtomobilni o'chirish
+      description: Avtomobilni o'chiradi. Faqat admin va superadmin uchun.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idParam'
+      responses:
+        '200':
+          description: Avtomobil muvaffaqiyatli o'chirildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Deleted car
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: accessToken
+      description: JWT access token cookie orqali yuboriladi (login/verify dan keyin avtomatik o'rnatiladi)
+
+  parameters:
+    idParam:
+      name: id
+      in: path
+      required: true
+      description: MongoDB ObjectId
+      schema:
+        type: string
+        example: 6648a1f2c3d4e5f6a7b8c9d0
+
+  schemas:
+    Brand:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6648a1f2c3d4e5f6a7b8c9d0
+        name:
+          type: string
+          example: Toyota
+        logo:
+          type: string
+          description: Logotip URL manzili
+          example: http://localhost:4001/uploads/toyota-logo.png
+        created_by:
+          type: string
+          description: Yaratgan admin ID si
+          example: 6648a1f2c3d4e5f6a7b8c9d1
+        createdAt:
+          type: string
+          format: date-time
+          example: 2024-06-01T10:00:00.000Z
+        updatedAt:
+          type: string
+          format: date-time
+          example: 2024-06-01T10:00:00.000Z
+
+    Car:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6648b2g3h4i5j6k7l8m9n0
+        title:
+          type: string
+          example: Toyota Camry
+        brand_info:
+          $ref: '#/components/schemas/Brand'
+        tanirovkasi:
+          type: string
+          example: Sedan
+        motor:
+          type: string
+          example: 2.5L
+        year:
+          type: integer
+          example: 2022
+        color:
+          type: string
+          example: White
+        distance:
+          type: number
+          example: 35000
+        gearbook:
+          type: string
+          example: Automatic
+        narxi:
+          type: number
+          example: 25000
+        picture:
+          type: string
+          description: Asosiy rasm URL
+          example: http://localhost:4001/uploads/camry-main.jpg
+        picture_ichki:
+          type: string
+          description: Ichki ko'rinish URL
+          example: http://localhost:4001/uploads/camry-interior.jpg
+        picture_tashqi:
+          type: string
+          description: Tashqi ko'rinish URL
+          example: http://localhost:4001/uploads/camry-exterior.jpg
+        description:
+          type: string
+          example: Yaxshi holda, bitta egasi bor edi
+        created_by:
+          type: string
+          description: Yaratgan admin ID si
+          example: 6648a1f2c3d4e5f6a7b8c9d1
+        createdAt:
+          type: string
+          format: date-time
+          example: 2024-06-01T10:00:00.000Z
+        updatedAt:
+          type: string
+          format: date-time
+          example: 2024-06-01T10:00:00.000Z
+
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6648a1f2c3d4e5f6a7b8c9d1
+        username:
+          type: string
+          example: Doniyor
+        email:
+          type: string
+          format: email
+          example: salaevdonik@gmail.com
+        role:
+          type: string
+          enum: [user, admin, superadmin]
+          example: admin
+        createdAt:
+          type: string
+          format: date-time
+          example: 2024-06-01T10:00:00.000Z
+
+    Profile:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            my_brands:
+              type: array
+              description: Faqat admin/superadmin uchun — o'z brendlari
+              items:
+                $ref: '#/components/schemas/Brand'
+            my_cars:
+              type: array
+              description: Faqat admin/superadmin uchun — o'z avtomobillari
+              items:
+                $ref: '#/components/schemas/Car'
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Error message
+
+  responses:
+    BadRequest:
+      description: Noto'g'ri so'rov
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: file bolishi shart!
+
+    Unauthorized:
+      description: Autentifikatsiya xatosi
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: User not found
+
+    Forbidden:
+      description: Ruxsat yo'q
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: you are not admin
+
+    NotFound:
+      description: Topilmadi
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: Brand not found
+
+    InternalError:
+      description: Server xatosi
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: Internal Server Error
