@@ -498,7 +498,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/Car'
 
-  get_cars_by_brand/{brand_id}:
+  /get_cars_by_brand/{brand_id}:
     get:
       tags:
         - Car
@@ -710,7 +710,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  delete_car/{id}:
+  /delete_car/{id}:
     delete:
       tags:
         - Car
